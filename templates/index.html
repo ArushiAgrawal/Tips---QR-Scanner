@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tip App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+        }
+        .success {
+            color: green;
+            margin: 10px 0;
+        }
+        .info {
+            color: blue;
+            margin: 10px 0;
+        }
+        .warning {
+            color: orange;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Get Your Tip</h2>
+
+<div id="phoneInputSection">
+    <p>Enter your phone number to check eligibility</p>
+    <input type="text" id="phone" placeholder="Enter 10-digit mobile number" />
+    <button onclick="checkEligibility()">Check Eligibility</button>
+    <p id="phoneMessage"></p>
+</div>
+
+<div id="resultSection" style="display: none;">
+    <p id="resultMessage"></p>
+    <div id="actionButton"></div>
+</div>
+
+<script>
+let userId = null;
+
+async function checkEligibility() {
+    const phone = document.getElementById("phone").value.trim();
+    const phoneMessage = document.getElementById("phoneMessage");
+
+    if (!phone) {
+        phoneMessage.innerText = "Please enter your phone number";
+        phoneMessage.className = "error";
+        return;
+    }
+
+    try {
+        const res = await fetch(`/check-user?phone_number=${phone}`, {
+            method: "POST"
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            phoneMessage.innerText = data.error;
+            phoneMessage.className = "error";
+            return;
+        }
+
+        userId = data.user_id;
+
+        // Hide phone section, show result section
+        document.getElementById("phoneInputSection").style.display = "none";
+        document.getElementById("resultSection").style.display = "block";
+
+        const resultMessage = document.getElementById("resultMessage");
+        const actionButton = document.getElementById("actionButton");
+
+        if (data.status === "ELIGIBLE") {
+            resultMessage.innerText = data.message;
+            resultMessage.className = "success";
+            actionButton.innerHTML = `
+                <p><strong>Enter your UPI ID to receive ₹20 tip:</strong></p>
+                <input type="text" id="upiId" placeholder="e.g., yourname@paytm" />
+                <button onclick="submitUpiAndRequestTip()">Submit UPI & Request Tip</button>
+                <button onclick="resetFlow()">Cancel</button>
+            `;
+        } else if (data.status === "NOT_ELIGIBLE") {
+            resultMessage.innerText = data.message;
+            resultMessage.className = "warning";
+            actionButton.innerHTML = `<button onclick="resetFlow()">Try Again Later</button>`;
+        }
+    } catch (error) {
+        phoneMessage.innerText = "Error checking eligibility. Please try again.";
+        phoneMessage.className = "error";
+    }
+}
+
+async function submitUpiAndRequestTip() {
+    const upiId = document.getElementById("upiId").value.trim();
+    
+    if (!upiId) {
+        alert("Please enter your UPI ID");
+        return;
+    }
+
+    try {
+        // First, save UPI ID
+        const saveRes = await fetch(`/save-upi?user_id=${userId}&upi_id=${encodeURIComponent(upiId)}`, {
+            method: "POST"
+        });
+        const saveData = await saveRes.json();
+
+        if (saveData.error) {
+            alert(saveData.error);
+            return;
+        }
+
+        // Then request tip
+        const tipRes = await fetch(`/request-tip?user_id=${userId}`, {
+            method: "POST"
+        });
+        const tipData = await tipRes.json();
+
+        const actionButton = document.getElementById("actionButton");
+        actionButton.innerHTML = `
+            <p class="success">✓ Request sent! We will review and send you ₹20 via UPI to ${upiId} if approved.</p>
+            <button onclick="resetFlow()">Done</button>
+        `;
+    } catch (error) {
+        alert("Error processing request. Please try again.");
+    }
+}
+
+function resetFlow() {
+    userId = null;
+    document.getElementById("phone").value = "";
+    document.getElementById("phoneMessage").innerText = "";
+    document.getElementById("phoneInputSection").style.display = "block";
+    document.getElementById("resultSection").style.display = "none";
+}
+</script>
+
+</body>
+</html>
